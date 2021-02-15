@@ -97,6 +97,24 @@ public:
 	}
 };
 class MSE : public Error {};
+class BCE : public Error {
+private:
+	double __epsilon;
+public:
+	BCE() { __epsilon = numeric_limits<double>::epsilon(); }
+	virtual double f(double y, double p) const override {
+		if (0. < p && p < 1.) return -(y * log(p) + (1. - y) * log(1. - p));
+		else if (p == 0) p = __epsilon;
+		else if (p == 1) p = 1. - __epsilon;
+		return -(y * log(p) + (1. - y) * log(1. - p));
+	}
+	virtual double df(double y, double p) const override {
+		if (0. < p && p < 1.) return -y / p + (1. - y) / (1. - p);
+		else if (p == 0) p = __epsilon;
+		else if (p == 1) p = 1. - __epsilon;
+		return -y / p + (1. - y) / (1. - p);
+	}
+};
 
 class Optimizer {
 protected:
@@ -253,51 +271,40 @@ ostream& operator<<(ostream& out, const Unit& unit) {
 	return out;
 }
 
-void test2(Optimizer& opt, const size_t N = 100, double std = 1.) {
+void test(Activation& activation, Error& error, const size_t N = 100, double std = 1.) {
 
-    random_device seed_gen;
-    default_random_engine engine(seed_gen());
-    normal_distribution<> dist(0., std);
+	random_device seed_gen;
+	default_random_engine engine(seed_gen());
+	normal_distribution<> dist(0., std);
 
-    Linear activation;
-    MSE error;
+	GD opt;
+	Sigmoid sigmoid;
 
-    vector<vector<double> > X;
-    vector<double> Y;
+	vector<vector<double> > X;
+	vector<double> Y;
 
-    for (int n = 0; n < N; n++) {
-        double x = dist(engine), y = dist(engine);
-        double sum = x / 2. - y / 2 - 2;
-        X.push_back({ x, y });
-        Y.push_back(activation(sum));
-    }
+	for (int n = 0; n < N; n++) {
+		double x = dist(engine), y = dist(engine);
+		double sum = x / 2. - y / 2 - 2;
+		X.push_back({ x, y });
+		Y.push_back(sigmoid(sum));
+	}
 
-    Unit model(2, activation);
-    model.compile(opt, error);
-    model.fit(X, Y, 100, 0);
-    cout << model;
+	Unit model(2, activation);
+	model.compile(opt, error);
+	model.fit(X, Y, 200, 0);
+	cout << model;
 }
 
+
 int main() {
-    GD gd, gd2;
-    Adam adam, adam2;
-    size_t N;
-    double std;
+	Linear linear;
+	MSE mse;
 
-    N = 100; std = 1.;
+	test(linear, mse);
+	cout << "\n\n";
+	Sigmoid sigmoid;
+	BCE bce;
 
-    cout << "GD\n";
-    test2(gd, N, std);
-    cout << "\n\n";
-    cout << "Adam\n";
-    test2(adam, N, std);
-    cout << "\n\n";
-
-    N = 100; std = 10.;
-
-    cout << "GD\n";
-    test2(gd2, N, std);
-    cout << "\n\n";
-    cout << "Adam\n";
-    test2(adam2, N, std);
+	test(sigmoid, bce);
 }
