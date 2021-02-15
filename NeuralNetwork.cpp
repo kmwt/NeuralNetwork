@@ -39,6 +39,16 @@ vector<double> operator/(const vector<double>& x, double a) {
 	for (size_t d = 0; d < x.size(); d++) z[d] = x[d] / a;
 	return z;
 }
+vector<double> operator+(const vector<double>& x, double a) {
+    vector<double> z(x.size());
+    for (size_t d = 0; d < x.size(); d++) z[d] = x[d] + a;
+    return z;
+}
+vector<double> operator/(const vector<double>& x, const vector<double>& y) {
+    vector<double> z(x.size());
+    for (size_t d = 0; d < x.size(); d++) z[d] = x[d] / y[d];
+    return z;
+}
 
 double Sum(const vector<double>& x) {
 	double z = 0.;
@@ -102,6 +112,52 @@ public:
 };
 class GD : public Optimizer {
 public:GD(double lr = 0.01) { __lr_b = lr; }
+};
+class Adam : public Optimizer {
+private:
+	vector<double> __sqrt(vector<double> x) {
+		vector<double> y(x.size());
+		for (size_t d = 0; d < y.size(); d++) y[d] = sqrt(x[d]);
+		return y;
+	}
+protected:
+	double __beta_1, __beta_2, __epsilon;
+	int __t_w, __t_b;
+	vector<double> __m_w, __v_w;
+	double __m_b, __v_b;
+public:
+	Adam(double lr = 0.001, double beta_1 = 0.9, double beta_2 = 0.999, double epsilon = 1e-8) {
+		__lr_b = lr;
+		__beta_1 = beta_1;
+		__beta_2 = beta_2;
+		__epsilon = epsilon;
+
+		__t_w = __t_b = 0;
+		__m_b = __v_b = 0;
+	}
+	void set_length(size_t  length) override {
+		for (size_t d = 0; d < length; d++) {
+			__m_w.push_back(0);
+			__v_w.push_back(0);
+		}
+	}
+	vector<double> operator()(const vector<double>& grad) override {
+		__t_w++;
+		__m_w = __beta_1 * __m_w + (1. - __beta_1) * grad;
+		__v_w = __beta_2 * __v_w + (1. - __beta_2) * grad * grad;
+		vector<double> m = __m_w / (1. - pow(__beta_1, __t_w));
+		vector<double> v = __v_w / (1. - pow(__beta_2, __t_w));
+		return __lr_b * m / __sqrt(v + __epsilon);
+	}
+	double operator()(double grad) override {
+		__t_b++;
+		__m_b = __beta_1 * __m_b + (1. - __beta_1) * grad;
+		__v_b = __beta_2 * __v_b + (1. - __beta_2) * grad * grad;
+		double m = __m_b / (1. - pow(__beta_1, __t_b));
+		double v = __v_b / (1. - pow(__beta_2, __t_b));
+		double tmp = __lr_b * m / sqrt(v + __epsilon);
+		return tmp;
+	}
 };
 
 class Unit {
@@ -197,20 +253,13 @@ ostream& operator<<(ostream& out, const Unit& unit) {
 	return out;
 }
 
-void test(
-    size_t verbose = 1,
-    const size_t N = 1000, 
-    const double std = 1, 
-    const double lr = 0.01, 
-    size_t epochs = 100
-) {
+void test2(Optimizer& opt, const size_t N = 100, double std = 1.) {
 
     random_device seed_gen;
     default_random_engine engine(seed_gen());
     normal_distribution<> dist(0., std);
 
     Linear activation;
-    GD opt(lr);
     MSE error;
 
     vector<vector<double> > X;
@@ -225,27 +274,31 @@ void test(
 
     Unit model(2, activation);
     model.compile(opt, error);
-    model.fit(X, Y, epochs, verbose);
+    model.fit(X, Y, 100, 0);
     cout << model;
 }
 
 int main() {
 
-    size_t verbose;
+    GD gd, gd2;
+    Adam adam, adam2;
     size_t N;
     double std;
-    double lr;
-    size_t epochs;
+ 
+    N = 100; std = 1.;
 
-    verbose = 1;
-    N = 100;
-    std = 10;
-    lr = 0.01;
-    epochs = 30;
+    cout << "GD\n";
+    test2(gd, N, std);
+    cout << "\n\n";
+    cout << "Adam\n";
+    test2(adam, N, std);
+    cout << "\n\n";
 
-    cout << "サンプル数："<<N<<
-        "\t データの分散："<< std <<
-        "\t 学習係数："<< lr <<
-        "\t 学習回数："<< epochs << "\n";
-    test(verbose, N, std, lr, epochs);
+    N = 100; std = 10.;
+
+    cout << "GD\n";
+    test2(gd2, N, std);
+    cout << "\n\n";
+    cout << "Adam\n";
+    test2(adam2, N, std);
 } 
